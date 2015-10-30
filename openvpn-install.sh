@@ -20,11 +20,6 @@ if [[ ! -e /dev/net/tun ]]; then
 fi
 
 
-if grep -qs "CentOS release 5" "/etc/redhat-release"; then
-	echo "CentOS 5 is too old and not supported"
-	exit
-fi
-
 if [[ -e /etc/debian_version ]]; then
 	OS=debian
 	RCLOCAL='/etc/rc.local'
@@ -53,13 +48,11 @@ newclient () {
 }
 
 
-# Try to get our IP from the system and fallback to the Internet.
-# I do this to make the script compatible with NATed servers (lowendspirit.com)
-# and to avoid getting an IPv6.
-IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
-if [[ "$IP" = "" ]]; then
-		IP=$(wget -qO- ipv4.icanhazip.com)
-fi
+## IPv6 address
+# IP=$(ip addr | grep 'inet' | grep -v inet6 | grep -vE '127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -o -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
+# if [[ "$IP" = "" ]]; then
+		IP=$(wget -qO- ipv6.icanhazip.com)
+# fi
 
 
 if [[ -e /etc/openvpn/server.conf ]]; then
@@ -167,21 +160,22 @@ else
 	echo "I need to ask you a few questions before starting the setup"
 	echo "You can leave the default options and just press enter if you are ok with them"
 	echo ""
-	echo "First I need to know the IPv4 address of the network interface you want OpenVPN"
+	echo "First I need to know the IPv6 address of the network interface you want OpenVPN"
 	echo "listening to."
 	read -p "IP address: " -e -i $IP IP
 	echo ""
 	echo "What port do you want for OpenVPN?"
-	read -p "Port: " -e -i 1194 PORT
-	echo ""
-	echo "What DNS do you want to use with the VPN?"
-	echo "   1) Current system resolvers"
-	echo "   2) OpenDNS"
-	echo "   3) Level 3"
-	echo "   4) NTT"
-	echo "   5) Hurricane Electric"
-	echo "   6) Google"
+	read -p "Port: " -e -i 1199 PORT
+	# echo ""
+	# echo "What DNS do you want to use with the VPN?"
+	# echo "   1) Current system resolvers"
+	# echo "   2) OpenDNS"
+	# echo "   3) Level 3"
+	# echo "   4) NTT"
+	# echo "   5) Hurricane Electric"
+	# echo "   6) Google"
 	read -p "DNS [1-6]: " -e -i 1 DNS
+	DNS=6
 	echo ""
 	echo "Finally, tell me your name for the client cert"
 	echo "Please, use one word only, no special characters"
@@ -220,41 +214,43 @@ else
 	cp pki/ca.crt pki/private/ca.key pki/dh.pem pki/issued/server.crt pki/private/server.key /etc/openvpn
 	# Generate server.conf
 	echo "port $PORT
-proto udp
+proto udp6
 dev tun
+tun-ipv6
 ca ca.crt
 cert server.crt
 key server.key
 dh dh.pem
 topology subnet
 server 10.8.0.0 255.255.255.0
+server-ipv6 2001:abcd:abcd:2::/64
 ifconfig-pool-persist ipp.txt" > /etc/openvpn/server.conf
 	echo 'push "redirect-gateway def1 bypass-dhcp"' >> /etc/openvpn/server.conf
 	# DNS
 	case $DNS in
-		1) 
-		# Obtain the resolvers from resolv.conf and use them for OpenVPN
-		grep -v '#' /etc/resolv.conf | grep 'nameserver' | grep -E -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | while read line; do
-			echo "push \"dhcp-option DNS $line\"" >> /etc/openvpn/server.conf
-		done
-		;;
-		2)
-		echo 'push "dhcp-option DNS 208.67.222.222"' >> /etc/openvpn/server.conf
-		echo 'push "dhcp-option DNS 208.67.220.220"' >> /etc/openvpn/server.conf
-		;;
-		3) 
-		echo 'push "dhcp-option DNS 4.2.2.2"' >> /etc/openvpn/server.conf
-		echo 'push "dhcp-option DNS 4.2.2.4"' >> /etc/openvpn/server.conf
-		;;
-		4) 
-		echo 'push "dhcp-option DNS 129.250.35.250"' >> /etc/openvpn/server.conf
-		echo 'push "dhcp-option DNS 129.250.35.251"' >> /etc/openvpn/server.conf
-		;;
-		5) 
-		echo 'push "dhcp-option DNS 74.82.42.42"' >> /etc/openvpn/server.conf
-		;;
+		# 1) 
+		# # Obtain the resolvers from resolv.conf and use them for OpenVPN
+		# grep -v '#' /etc/resolv.conf | grep 'nameserver' | grep -E -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | while read line; do
+		# 	echo "push \"dhcp-option DNS $line\"" >> /etc/openvpn/server.conf
+		# done
+		# ;;
+		# 2)
+		# echo 'push "dhcp-option DNS 208.67.222.222"' >> /etc/openvpn/server.conf
+		# echo 'push "dhcp-option DNS 208.67.220.220"' >> /etc/openvpn/server.conf
+		# ;;
+		# 3) 
+		# echo 'push "dhcp-option DNS 4.2.2.2"' >> /etc/openvpn/server.conf
+		# echo 'push "dhcp-option DNS 4.2.2.4"' >> /etc/openvpn/server.conf
+		# ;;
+		# 4) 
+		# echo 'push "dhcp-option DNS 129.250.35.250"' >> /etc/openvpn/server.conf
+		# echo 'push "dhcp-option DNS 129.250.35.251"' >> /etc/openvpn/server.conf
+		# ;;
+		# 5) 
+		# echo 'push "dhcp-option DNS 74.82.42.42"' >> /etc/openvpn/server.conf
+		# ;;
 		6) 
-		echo 'push "dhcp-option DNS 8.8.8.8"' >> /etc/openvpn/server.conf
+		echo 'push "dhcp-option DNS 10.8.0.1"' >> /etc/openvpn/server.conf
 		echo 'push "dhcp-option DNS 8.8.4.4"' >> /etc/openvpn/server.conf
 		;;
 	esac
@@ -268,6 +264,7 @@ crl-verify /etc/openvpn/easy-rsa/pki/crl.pem" >> /etc/openvpn/server.conf
 	# Enable net.ipv4.ip_forward for the system
 	if [[ "$OS" = 'debian' ]]; then
 		sed -i 's|#net.ipv4.ip_forward=1|net.ipv4.ip_forward=1|' /etc/sysctl.conf
+		sed -i 's|#net.ipv6.conf.all.forwarding=1|net.ipv6.conf.all.forwarding=1|' /etc/sysctl.conf
 	else
 		# CentOS 5 and 6
 		sed -i 's|net.ipv4.ip_forward = 0|net.ipv4.ip_forward = 1|' /etc/sysctl.conf
@@ -334,7 +331,8 @@ crl-verify /etc/openvpn/easy-rsa/pki/crl.pem" >> /etc/openvpn/server.conf
 	# client-common.txt is created so we have a template to add further users later
 	echo "client
 dev tun
-proto udp
+tun-ipv6
+proto udp6
 remote $IP $PORT
 resolv-retry infinite
 nobind
